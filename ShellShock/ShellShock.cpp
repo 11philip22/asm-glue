@@ -1,7 +1,6 @@
 #include <cstdio>
 #include <fstream>
-
-#include "Windows.h"
+#include <Windows.h>
 
 BOOL ConvertToShellcode(LPSTR& outBytes, DWORD& outLength)
 {
@@ -14,16 +13,87 @@ BOOL ConvertToShellcode(LPSTR& outBytes, DWORD& outLength)
     DWORD shellCodeB32Length = 645, shellCodeB64Length = 560;
     //MARKER:E
 
+#if defined(_WIN64)
+	LPSTR shellcodeA = shellCodeA64;
+	LPSTR shellcodeB = shellCodeB64;
+	DWORD shellcodeALength = shellCodeA64Length;
+	DWORD shellcodeBLength = shellCodeB64Length;
+
+	BYTE bootstrap[32] = { 0 };
+	size_t i = 0;
+
+	// push rbp
+	bootstrap[i++] = 0x55;
+
+	// mov rbp, rsp
+	bootstrap[i++] = 0x48;
+	bootstrap[i++] = 0x89;
+	bootstrap[i++] = 0xE5;
+
+	// sub rsp, 0x20
+	bootstrap[i++] = 0x48;
+	bootstrap[i++] = 0x83;
+	bootstrap[i++] = 0xEC;
+	bootstrap[i++] = 0x20;
+
+	// call - Transfer execution to shellCodeA
+	bootstrap[i++] = 0xE8;
+	DWORD shellcodeAOffset = sizeof(bootstrap) - i - 4;
+	bootstrap[i++] = (BYTE)shellcodeAOffset;
+	bootstrap[i++] = (BYTE)(shellcodeAOffset >> 8);
+	bootstrap[i++] = (BYTE)(shellcodeAOffset >> 16);
+	bootstrap[i++] = (BYTE)(shellcodeAOffset >> 24);
+
+	// add rsp, 0x20
+	bootstrap[i++] = 0x48;
+	bootstrap[i++] = 0x83;
+	bootstrap[i++] = 0xC4;
+	bootstrap[i++] = 0x20;
+
+	// sub rsp, 0x20
+	bootstrap[i++] = 0x48;
+	bootstrap[i++] = 0x83;
+	bootstrap[i++] = 0xEC;
+	bootstrap[i++] = 0x20;
+
+	// call - Transfer execution to shellCodeB
+	bootstrap[i++] = 0xE8;
+	DWORD shellcodeBOffset = sizeof(bootstrap) + shellcodeALength - i - 4;
+	bootstrap[i++] = (BYTE)shellcodeBOffset;
+	bootstrap[i++] = (BYTE)(shellcodeBOffset >> 8);
+	bootstrap[i++] = (BYTE)(shellcodeBOffset >> 16);
+	bootstrap[i++] = (BYTE)(shellcodeBOffset >> 24);
+
+	// add rsp, 0x20
+	bootstrap[i++] = 0x48;
+	bootstrap[i++] = 0x83;
+	bootstrap[i++] = 0xC4;
+	bootstrap[i++] = 0x20;
+
+	// leave
+	bootstrap[i++] = 0xC9;
+
+	// ret - return to caller
+	bootstrap[i++] = 0xC3;
+
+	// Ends up looking like this in memory:
+	// Bootstrap shellcode
+	// shellCodeA
+	// shellCodeB
+	outLength = sizeof(bootstrap) + shellcodeALength + shellcodeBLength;
+	outBytes = (LPSTR)malloc(outLength);
+	MoveMemory(outBytes, bootstrap, sizeof(bootstrap));
+	MoveMemory(outBytes + sizeof(bootstrap), shellcodeA, shellcodeALength);
+	MoveMemory(outBytes + sizeof(bootstrap) + shellcodeALength, shellcodeB, shellcodeBLength);
+#else
 	LPSTR shellcodeA = shellCodeA32;
 	LPSTR shellcodeB = shellCodeB32;
 	DWORD shellcodeALength = shellCodeA32Length;
 	DWORD shellcodeBLength = shellCodeB32Length;
-	
-	if (shellcodeA == NULL || shellcodeALength == 0) return FALSE;
 
 	BYTE bootstrap[12] = { 0 };
 	DWORD i = 0;
-	
+
 	// call - Transfer execution to shellCodeA
 	bootstrap[i++] = 0xe8;
 	DWORD shellcodeAOffset = sizeof(bootstrap) - i - 4;
@@ -31,7 +101,7 @@ BOOL ConvertToShellcode(LPSTR& outBytes, DWORD& outLength)
 	bootstrap[i++] = (BYTE)(shellcodeAOffset >> 8);
 	bootstrap[i++] = (BYTE)(shellcodeAOffset >> 16);
 	bootstrap[i++] = (BYTE)(shellcodeAOffset >> 24);
-	
+
 	// call - Transfer execution to shellCodeB
 	bootstrap[i++] = 0xe8;
 	DWORD shellcodeBOffset = sizeof(bootstrap) + shellcodeALength - i - 4;
@@ -55,7 +125,7 @@ BOOL ConvertToShellcode(LPSTR& outBytes, DWORD& outLength)
 	MoveMemory(outBytes, bootstrap, sizeof(bootstrap));
 	MoveMemory(outBytes + sizeof(bootstrap), shellcodeA, shellcodeALength);
 	MoveMemory(outBytes + sizeof(bootstrap) + shellcodeALength, shellcodeB, shellcodeBLength);
-
+#endif
 	return TRUE;
 }
 
