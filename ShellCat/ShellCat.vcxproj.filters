@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="ShellShock.cpp">
+    <ClCompile Include="ShellCat.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
